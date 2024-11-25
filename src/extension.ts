@@ -262,6 +262,7 @@ export function activate(context: vscode.ExtensionContext) {
 	let currentInput = "";
 	let currentDot = "";
 	let currentSVG = "";
+	let editor: vscode.TextEditor | undefined;
 
 	async function loadWebViewPanel(panel: vscode.WebviewPanel) {
 		const remotePromises = [] as { resolve: (value: any) => void, reject: (error: any) => void}[];
@@ -286,7 +287,6 @@ export function activate(context: vscode.ExtensionContext) {
 			return promise;
 		}
 
-		let editor: vscode.TextEditor | undefined;
 		const messageDisposable = panel.webview.onDidReceiveMessage(async message => {
 			switch (message.event) {
 				case "resolve":
@@ -417,7 +417,14 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const exportSVGDisposable = vscode.commands.registerCommand('deciduous-previewer.export', async () => {
 		if (currentSVG !== "") {
+			let defaultUri;
+			if (editor !== undefined && editor.document.uri.scheme !== "untitled") {
+				defaultUri = editor.document.uri.with({
+					path: editor.document.uri.path.replace(/(\.\w+)?$/, ".png"),
+				});
+			}
 			const uri = await vscode.window.showSaveDialog({
+				defaultUri,
 				filters: {
 					"PNG Image": ["png"],
 					"SVG Image": ["svg"],
