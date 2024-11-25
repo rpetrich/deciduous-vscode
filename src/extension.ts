@@ -1,7 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { convertToDot, type Input } from './layout';
+import { convertToDot, embedDotComment, embedSvgComment, trailingPngComment, type Input } from './layout';
 import * as jsyaml from 'js-yaml';
 const { Graphviz } = require('@hpcc-js/wasm-graphviz');
 
@@ -158,40 +158,84 @@ const webViewHTML = `<!doctype html>
 <head>
 	<script>
 		const vscode = acquireVsCodeApi();
-		window.addEventListener("message", ({ data }) => {
-			document.body.innerHTML = data.html;
-			const svgElement = document.body.querySelector("svg");
-			if (svgElement) {
-				const scale = 0.75;
-				svgElement.setAttribute("width", parseInt(svgElement.getAttribute("width"), 10) * scale + "pt");
-				svgElement.setAttribute("height", parseInt(svgElement.getAttribute("height"), 10) * scale + "pt");
-			};
-			// Add quick linky links
-			for (const title of document.body.querySelectorAll("title")) {
-				title.parentNode.style.cursor = "pointer";
-				title.parentNode.addEventListener("click", () => {
-					const node = title.textContent;
-					const matches = node.match(/^(\\w+)->(\\w+)$/);
-					if (matches) {
-						vscode.postMessage({ event: "select-edge", from: matches[1], to: matches[2] });
-					} else {
-						vscode.postMessage({ event: "select-node", id: node });
+		async function performCommand(command, data) {
+			switch (command) {
+				case "update":
+					document.body.innerHTML = data;
+					const svgElement = document.body.querySelector("svg");
+					if (svgElement) {
+						const scale = 0.75;
+						svgElement.setAttribute("width", parseInt(svgElement.getAttribute("width"), 10) * scale + "pt");
+						svgElement.setAttribute("height", parseInt(svgElement.getAttribute("height"), 10) * scale + "pt");
+					};
+					// Add quick linky links
+					for (const title of document.body.querySelectorAll("title")) {
+						title.parentNode.style.cursor = "pointer";
+						title.parentNode.addEventListener("click", () => {
+							const node = title.textContent;
+							const matches = node.match(/^(\\w+)->(\\w+)$/);
+							if (matches) {
+								vscode.postMessage({ event: "select-edge", from: matches[1], to: matches[2] });
+							} else {
+								vscode.postMessage({ event: "select-node", id: node });
+							}
+						});
+						// Clone edge paths and make them thicker to make them easier to click
+						if (title.parentNode.getAttribute("class") === "edge") {
+							const path = title.parentNode.querySelector("path");
+							if (path) {
+								const thickPath = path.cloneNode(true);
+								thickPath.setAttribute("stroke", "transparent");
+								thickPath.setAttribute("stroke-width", "15px");
+								title.parentNode.insertBefore(thickPath, path);
+							}
+						}
 					}
-				});
-				// Clone edge paths and make them thicker to make them easier to click
-				if (title.parentNode.getAttribute("class") === "edge") {
-					const path = title.parentNode.querySelector("path");
-					if (path) {
-						const thickPath = path.cloneNode(true);
-						thickPath.setAttribute("stroke", "transparent");
-						thickPath.setAttribute("stroke-width", "15px");
-						title.parentNode.insertBefore(thickPath, path);
-					}
-				}
+					break;
+				case "exportPNG":
+					// create the SVG URL
+					const svgFile = new File([data.svg], "graph.svg", {
+						"type": "image/svg+xml",
+					});
+					const svgURL = URL.createObjectURL(svgFile);
+					// load the SVG image
+					const image = document.createElement("img");
+					await new Promise((resolve, reject) => {
+						image.onload = resolve;
+						image.onerror = reject;
+						image.src = svgURL;
+					});
+					// draw the SVG image onto a canvas
+					const canvas = document.createElement("canvas");
+					const scale = 2;
+					canvas.width = image.width * scale;
+					canvas.height = image.height * scale;
+					canvas.style.display = "none";
+					document.body.appendChild(canvas);
+					const context = canvas.getContext("2d");
+					context.drawImage(image, 0, 0, image.width * scale, image.height * scale);
+					// convert the canvas image to a PNG
+					const blob = await new Promise(resolve => canvas.toBlob(resolve, { type: "image/png" }));
+					// revoke the SVG URL
+					URL.revokeObjectURL(svgURL);
+					// destroy the temporary canvas
+					document.body.removeChild(canvas);
+					// convert the PNG blob to an array buffer
+					return new Blob([blob, data.trailer], { type: "image/png" }).arrayBuffer();
 			}
+		}
+		window.addEventListener("message", async ({ data: { data, command, id } }) => {
+			let value;
+			try {
+				value = await performCommand(command, data);
+			} catch (e) {
+				vscode.postMessage({ event: "reject", id, value: e.toString() });
+				return;
+			}
+			vscode.postMessage({ event: "resolve", id, value });
 		});
 		window.addEventListener("load", () => {
-			vscode.postMessage({ event: "load" });
+			vscode.postMessage({ event: "resolve", id: 0 });
 		});
 	</script>
 	<style>
@@ -210,23 +254,46 @@ const webViewHTML = `<!doctype html>
 </body>
 </html>`;
 
-let currentSVG = "";
-
 export function activate(context: vscode.ExtensionContext) {
 
 	let activePanel: vscode.WebviewPanel | undefined;
+	let sendCommand: ((name: string, data: any) => Promise<any>) | undefined;
+
+	let currentInput = "";
+	let currentDot = "";
+	let currentSVG = "";
 
 	async function loadWebViewPanel(panel: vscode.WebviewPanel) {
-		let loadedResolve = () => {};
-		const loaded = new Promise<void>(resolve => {
-			loadedResolve = resolve;
-		});
+		const remotePromises = [] as { resolve: (value: any) => void, reject: (error: any) => void}[];
+		function pushRemotePromise() {
+			return {
+				id: remotePromises.length,
+				promise: new Promise((resolve, reject) => {
+					remotePromises.push({ resolve, reject });
+				}),
+			};
+		}
+		function popRemotePromise(id: number) {
+			const result = remotePromises[id];
+			delete remotePromises[id];
+			return result;
+		}
+		async function performRemoteCommand(name: string, data: any) {
+			const { id, promise } = pushRemotePromise();
+			if (!await panel.webview.postMessage({ command: name, id, data })) {
+				throw new Error("web view is not live");
+			}
+			return promise;
+		}
 
 		let editor: vscode.TextEditor | undefined;
 		const messageDisposable = panel.webview.onDidReceiveMessage(async message => {
 			switch (message.event) {
-				case "load":
-					loadedResolve();
+				case "resolve":
+					popRemotePromise(message.id as number).resolve(message.value);
+					break;
+				case "reject":
+					popRemotePromise(message.id as number).reject(new Error(message.value));
 					break;
 				case "select-edge":
 					if (editor !== undefined) {
@@ -266,43 +333,48 @@ export function activate(context: vscode.ExtensionContext) {
 					break;
 				}
 		});
+		const { promise: loaded } = pushRemotePromise();
 		panel.webview.html = webViewHTML;
 
-		const textChangeDisposable = vscode.workspace.onDidChangeTextDocument((e: vscode.TextDocumentChangeEvent) => {
+		const textChangeDisposable = vscode.workspace.onDidChangeTextDocument(async (e: vscode.TextDocumentChangeEvent) => {
 			if (e.document === vscode.window.activeTextEditor?.document) {
-				rerender();
+				await rerender();
 			}
 		});
 
 		const graphviz = await Graphviz.load();
-		await loadedResolve();
+		loaded.then(rerender);
 
 		const editorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(rerender);
 		const panelDisposable = panel.onDidDispose(() => {
 			if (activePanel === panel) {
 				activePanel = undefined;
+				sendCommand = undefined;
 			}
 			textChangeDisposable.dispose();
 			editorChangeDisposable.dispose();
 			messageDisposable.dispose();
 			panelDisposable.dispose();
 		});
-		rerender();
+
+		sendCommand = performRemoteCommand;
 
 		function rerender() {
 			const newEditor = vscode.window.activeTextEditor;
 			if (newEditor !== undefined) {
 				editor = newEditor;
 				try {
-					const parsed = jsyaml.load(editor.document.getText());
+					currentInput = editor.document.getText();
+					const parsed = jsyaml.load(currentInput);
 					const { dot, types, title } = convertToDot(parsed as Input);
+					currentDot = dot;
 					if (title || Object.keys(types).length !== 0) {
 						currentSVG = graphviz.layout(dot, "svg", "dot");
 					}
 				} catch (e) {
 					currentSVG = "";
 				}
-				panel.webview.postMessage({ html: currentSVG });
+				return performRemoteCommand("update", currentSVG);
 			}
 		}
 	}
@@ -343,15 +415,26 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	const exportSVGDisposable = vscode.commands.registerCommand('deciduous-previewer.exportSVG', async () => {
+	const exportSVGDisposable = vscode.commands.registerCommand('deciduous-previewer.export', async () => {
 		if (currentSVG !== "") {
 			const uri = await vscode.window.showSaveDialog({
-				filters: { "SVG Image": ["svg"] },
+				filters: {
+					"PNG Image": ["png"],
+					"SVG Image": ["svg"],
+					"Graphviz DOT": ["dot"],
+				},
 			});
 			if (uri !== undefined) {
-				const bytes = new TextEncoder().encode(currentSVG);
-				await vscode.workspace.fs.writeFile(uri, bytes);
-				await vscode.workspace.openTextDocument(uri);
+				if (/\.png$/i.test(uri.path)) {
+					const buffer = await sendCommand!("exportPNG", { svg: currentSVG, trailer: trailingPngComment(currentInput)});
+					await vscode.workspace.fs.writeFile(uri, new Uint8Array(buffer));
+				} else if (/\.dot$/i.test(uri.path)) {
+					const bytes = new TextEncoder().encode(embedDotComment(currentDot, currentInput));
+					await vscode.workspace.fs.writeFile(uri, bytes);
+				} else {
+					const bytes = new TextEncoder().encode(embedSvgComment(currentSVG, currentInput));
+					await vscode.workspace.fs.writeFile(uri, bytes);
+				}
 			}
 		} else {
 			await vscode.window.showErrorMessage("No active Deciduous document");

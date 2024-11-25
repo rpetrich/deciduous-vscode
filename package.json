@@ -18,7 +18,7 @@
     "menus": {
       "webview/context": [
         {
-          "command": "deciduous-previewer.exportSVG",
+          "command": "deciduous-previewer.export",
           "when": "webviewId == 'deciduous-previewer.preview'"
         }
       ]
@@ -29,8 +29,8 @@
         "title": "Open Deciduous Preview"
       },
       {
-        "command": "deciduous-previewer.exportSVG",
-        "title": "Export Deciduous SVG",
+        "command": "deciduous-previewer.export",
+        "title": "Export Graph",
         "enablement": "webviewId == 'deciduous-previewer.preview'"
       }
     ],
