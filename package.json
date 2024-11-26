@@ -1,15 +1,17 @@
 {
   "name": "deciduous-previewer",
-  "displayName": "Deciduous Previewer",
-  "description": "Previewer for Deciduous decision trees",
+  "displayName": "Deciduous Decision Tree Previewer",
+  "description": "Preview pane for Deciduous decision trees",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.95.0"
   },
   "repository": "https://github.com/rpetrich/deciduous-vscode.git",
   "categories": [
-    "VSCode Extension"
+    "Visualization",
+    "Other"
   ],
+  "icon": "icon.png",
   "activationEvents": [
     "onWebviewPanel:deciduous-previewer.preview"
   ],

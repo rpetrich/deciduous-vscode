@@ -1,4 +1,4 @@
-# Deciduous Previewer
+# Deciduous Decision Tree Previewer
 
 A VSCode Extension port of [Deciduous](https://www.deciduous.app/) that simplifies building decision trees to model adverse scenarios.
 
