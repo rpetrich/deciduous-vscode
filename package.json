@@ -6,7 +6,7 @@
   "engines": {
     "vscode": "^1.95.0"
   },
-  "repository": "https://github.com/rpetrich/deciduous-vscode.git",
+  "repository": "https://github.com/shortridge-sensemaking/deciduous-vscode",
   "categories": [
     "Visualization",
     "Other"
