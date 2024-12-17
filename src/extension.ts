@@ -397,14 +397,14 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	const commandDisposable = vscode.commands.registerCommand('deciduous-previewer.showPreview', async () => {
+	const commandDisposable = vscode.commands.registerCommand('deciduous-vs.showPreview', async () => {
 		if (activePanel !== undefined) {
 			activePanel.dispose();
 			activePanel = undefined;
 		} else {
 			activePanel = vscode.window.createWebviewPanel(
-				'deciduous-previewer.preview',
-				'Deciduous Preview',
+				'deciduous-vs.preview',
+				'Deciduous',
 				{ viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
 				{ retainContextWhenHidden: true, enableScripts: true },
 			);
@@ -415,7 +415,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	const exportSVGDisposable = vscode.commands.registerCommand('deciduous-previewer.export', async () => {
+	const exportSVGDisposable = vscode.commands.registerCommand('deciduous-vs.export', async () => {
 		if (currentSVG !== "") {
 			let defaultUri;
 			if (editor !== undefined && editor.document.uri.scheme !== "untitled") {
@@ -448,7 +448,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	const serializableDisposable = vscode.window.registerWebviewPanelSerializer('deciduous-previewer.preview', {
+	const serializableDisposable = vscode.window.registerWebviewPanelSerializer('deciduous-vs.preview', {
 		async deserializeWebviewPanel(webviewPanel) {
 			if (activePanel !== undefined) {
 				activePanel.dispose();

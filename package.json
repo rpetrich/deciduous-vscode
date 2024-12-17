@@ -1,8 +1,8 @@
 {
-  "name": "deciduous-previewer",
-  "displayName": "Deciduous Decision Tree Previewer",
-  "description": "Preview pane for Deciduous decision trees",
-  "version": "0.0.2",
+  "name": "deciduous-vs",
+  "displayName": "Deciduous-VS",
+  "description": "Simplifies building decision trees to model adverse scenarios.",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -13,7 +13,7 @@
   ],
   "icon": "icon.png",
   "activationEvents": [
-    "onWebviewPanel:deciduous-previewer.preview"
+    "onWebviewPanel:deciduous-vs.preview"
   ],
   "main": "./dist/extension.js",
   "browser": "./dist/extension.js",
@@ -21,25 +21,25 @@
     "menus": {
       "webview/context": [
         {
-          "command": "deciduous-previewer.export",
-          "when": "webviewId == 'deciduous-previewer.preview'"
+          "command": "deciduous-vs.export",
+          "when": "webviewId == 'deciduous-vs.preview'"
         }
       ]
     },
     "commands": [
       {
-        "command": "deciduous-previewer.showPreview",
-        "title": "Open Deciduous Preview"
+        "command": "deciduous-vs.showPreview",
+        "title": "Open Deciduous"
       },
       {
-        "command": "deciduous-previewer.export",
+        "command": "deciduous-vs.export",
         "title": "Export Graph",
-        "enablement": "webviewId == 'deciduous-previewer.preview'"
+        "enablement": "webviewId == 'deciduous-vs.preview'"
       }
     ],
     "keybindings": [
       {
-        "command": "deciduous-previewer.showPreview",
+        "command": "deciduous-vs.showPreview",
         "key": "ctrl+shift+d",
         "mac": "shift+cmd+d"
       }
