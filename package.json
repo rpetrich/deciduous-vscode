@@ -2,7 +2,8 @@
   "name": "deciduous-vs",
   "displayName": "Deciduous-VS",
   "description": "Simplifies building decision trees to model adverse scenarios.",
-  "version": "0.0.3",
+  "version": "1.0.0",
+  "publisher": "shortridge-sensemaking",
   "engines": {
     "vscode": "^1.95.0"
   },
